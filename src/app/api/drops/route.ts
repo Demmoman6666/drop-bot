@@ -12,8 +12,13 @@ export async function POST(req: NextRequest) {
   await initDB();
   const b = await req.json();
   const result = await sql`
-    INSERT INTO drops (name, url, monitor_interval, quantity, profile_id, use_proxy, keyword, atc_selector, checkout_mode, status)
-    VALUES (${b.name}, ${b.url}, ${b.monitor_interval||3}, ${b.quantity||1}, ${b.profile_id||null}, ${b.use_proxy||false}, ${b.keyword||''}, ${b.atc_selector||''}, ${b.checkout_mode||'browser'}, 'idle')
+    INSERT INTO drops (name, url, shop_id, search_term, drop_mode, monitor_interval, quantity, profile_id, use_proxy, keyword, atc_selector, checkout_mode, status, found_url)
+    VALUES (
+      ${b.name}, ${b.url||''}, ${b.shop_id||null}, ${b.search_term||''},
+      ${b.drop_mode||'url'}, ${b.monitor_interval||3}, ${b.quantity||1},
+      ${b.profile_id||null}, ${b.use_proxy||false}, ${b.keyword||''},
+      ${b.atc_selector||''}, ${b.checkout_mode||'browser'}, 'idle', ''
+    )
     RETURNING *
   `;
   return NextResponse.json(result[0]);

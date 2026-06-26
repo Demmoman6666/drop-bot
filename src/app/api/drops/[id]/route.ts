@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -9,10 +10,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   } else {
     await sql`
       UPDATE drops SET
-        name=${b.name}, url=${b.url}, monitor_interval=${b.monitor_interval||3},
-        quantity=${b.quantity||1}, profile_id=${b.profile_id||null},
-        use_proxy=${b.use_proxy||false}, keyword=${b.keyword||''},
-        atc_selector=${b.atc_selector||''}, checkout_mode=${b.checkout_mode||'browser'}
+        name=${b.name}, url=${b.url||''}, shop_id=${b.shop_id||null},
+        search_term=${b.search_term||''}, drop_mode=${b.drop_mode||'url'},
+        monitor_interval=${b.monitor_interval||3}, quantity=${b.quantity||1},
+        profile_id=${b.profile_id||null}, use_proxy=${b.use_proxy||false},
+        keyword=${b.keyword||''}, atc_selector=${b.atc_selector||''},
+        checkout_mode=${b.checkout_mode||'browser'}
       WHERE id=${id}
     `;
   }
