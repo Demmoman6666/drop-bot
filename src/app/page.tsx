@@ -1,18 +1,9 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-type Shop = { id: number; name: string; url: string; is_shopify: boolean; search_selector: string; };
-type Drop = {
-  id: number; name: string; url: string; shop_id: number | null; search_term: string;
-  drop_mode: string; monitor_interval: number; quantity: number; profile_id: number | null;
-  use_proxy: boolean; keyword: string; atc_selector: string; checkout_mode: string;
-  status: string; found_url: string;
-};
-type Profile = {
-  id: number; name: string; first_name: string; last_name: string; email: string;
-  phone: string; address1: string; address2: string; city: string; postcode: string;
-  country: string; card_name: string; card_number: string; card_expiry: string; card_cvv: string;
-};
+type Shop = { id: number; name: string; url: string; is_shopify: boolean; search_selector: string; login_email: string; login_password: string; };
+type Drop = { id: number; name: string; url: string; shop_id: number | null; search_term: string; drop_mode: string; monitor_interval: number; quantity: number; profile_id: number | null; use_proxy: boolean; keyword: string; atc_selector: string; checkout_mode: string; status: string; found_url: string; };
+type Profile = { id: number; name: string; first_name: string; last_name: string; email: string; phone: string; address1: string; address2: string; city: string; postcode: string; country: string; card_name: string; card_number: string; card_expiry: string; card_cvv: string; };
 type Log = { id: number; drop_id: number | null; level: string; message: string; created_at: string; };
 
 const STATUS: Record<string, { bg: string; color: string; label: string }> = {
@@ -53,9 +44,10 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
 }
 
 function ShopForm({ shop, onSave, onClose }: { shop: Partial<Shop> | null; onSave: () => void; onClose: () => void }) {
-  const [s, setS] = useState({ name: '', url: '', is_shopify: false, search_selector: '', ...shop });
+  const [s, setS] = useState({ name: '', url: '', is_shopify: false, search_selector: '', login_email: '', login_password: '', ...shop });
   const [detecting, setDetecting] = useState(false);
   const [detected, setDetected] = useState<boolean | null>(null);
+  const [showLogin, setShowLogin] = useState(!!(shop?.login_email));
 
   async function detect() {
     if (!s.url) return;
@@ -65,9 +57,7 @@ function ShopForm({ shop, onSave, onClose }: { shop: Partial<Shop> | null; onSav
       const data = await res.json();
       setS(p => ({ ...p, is_shopify: data.is_shopify }));
       setDetected(data.is_shopify);
-    } finally {
-      setDetecting(false);
-    }
+    } finally { setDetecting(false); }
   }
 
   async function save() {
@@ -81,27 +71,45 @@ function ShopForm({ shop, onSave, onClose }: { shop: Partial<Shop> | null; onSav
 
   return (
     <div>
-      <F label="Shop name"><input style={inp} value={s.name} onChange={e => setS(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Break Palace" /></F>
+      <F label="Shop name"><input style={inp} value={s.name} onChange={e => setS(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Topps UK" /></F>
       <F label="Shop URL">
         <div style={{ display: 'flex', gap: 8 }}>
-          <input style={{ ...inp, fontFamily: 'monospace', flex: 1 }} value={s.url} onChange={e => setS(p => ({ ...p, url: e.target.value }))} placeholder="https://breakpalace.com" />
-          <button style={btn({ flexShrink: 0, background: detecting ? '#1a1a2b' : '#1a1a1a' })} onClick={detect} disabled={detecting}>
-            {detecting ? 'Detecting…' : 'Detect'}
-          </button>
+          <input style={{ ...inp, fontFamily: 'monospace', flex: 1 }} value={s.url} onChange={e => setS(p => ({ ...p, url: e.target.value }))} placeholder="https://uk.topps.com" />
+          <button style={btn({ flexShrink: 0 })} onClick={detect} disabled={detecting}>{detecting ? 'Detecting…' : 'Detect'}</button>
         </div>
         {detected !== null && (
           <div style={{ fontSize: 12, marginTop: 6, color: detected ? '#4ade80' : '#facc15' }}>
-            {detected ? '✓ Shopify detected — fast API mode will be used' : '⚠ Non-Shopify — search crawl mode will be used'}
+            {detected ? '✓ Shopify — fast API mode' : '⚠ Non-Shopify — search crawl mode'}
           </div>
         )}
       </F>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <input type="checkbox" id="isShopify" checked={s.is_shopify} onChange={e => setS(p => ({ ...p, is_shopify: e.target.checked }))} />
-        <label htmlFor="isShopify" style={{ fontSize: 13, color: '#888', cursor: 'pointer' }}>Shopify store (override)</label>
+        <label htmlFor="isShopify" style={{ fontSize: 13, color: '#888', cursor: 'pointer' }}>Shopify store (manual override)</label>
       </div>
-      <F label="Search results CSS selector (optional — only for non-Shopify sites)">
-        <input style={{ ...inp, fontFamily: 'monospace' }} value={s.search_selector} onChange={e => setS(p => ({ ...p, search_selector: e.target.value }))} placeholder=".product-item or .search-result" />
+      <F label="Search results CSS selector (optional)">
+        <input style={{ ...inp, fontFamily: 'monospace' }} value={s.search_selector} onChange={e => setS(p => ({ ...p, search_selector: e.target.value }))} placeholder=".product-item" />
       </F>
+
+      {/* Login section */}
+      <div style={{ borderTop: '0.5px solid #2a2a2a', marginTop: 16, paddingTop: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showLogin ? 12 : 0 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>Site login (optional)</div>
+            <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Bot will log in automatically if the site requires it</div>
+          </div>
+          <button onClick={() => setShowLogin(!showLogin)} style={btn({ fontSize: 12, color: showLogin ? '#f87171' : '#4ade80', borderColor: showLogin ? '#f8717155' : '#16a34a55', background: showLogin ? '#2b0d0d' : '#0d2b1a' })}>
+            {showLogin ? 'Remove login' : '+ Add login'}
+          </button>
+        </div>
+        {showLogin && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+            <F label="Email / username"><input style={inp} value={s.login_email} onChange={e => setS(p => ({ ...p, login_email: e.target.value }))} placeholder="your@email.com" /></F>
+            <F label="Password"><input style={inp} type="password" value={s.login_password} onChange={e => setS(p => ({ ...p, login_password: e.target.value }))} placeholder="••••••••" /></F>
+          </div>
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: 8, marginTop: '1.25rem', justifyContent: 'flex-end' }}>
         <button style={btn()} onClick={onClose}>Cancel</button>
         <button style={btn({ background: '#0d2b1a', borderColor: '#16a34a55', color: '#4ade80' })} onClick={save}>Save shop</button>
@@ -111,13 +119,8 @@ function ShopForm({ shop, onSave, onClose }: { shop: Partial<Shop> | null; onSav
 }
 
 function DropForm({ drop, shops, profiles, onSave, onClose }: { drop: Partial<Drop> | null; shops: Shop[]; profiles: Profile[]; onSave: () => void; onClose: () => void }) {
-  const [d, setD] = useState<Partial<Drop>>({
-    name: '', url: '', shop_id: null, search_term: '', drop_mode: 'search',
-    monitor_interval: 3, quantity: 1, profile_id: profiles[0]?.id || null,
-    use_proxy: false, keyword: '', atc_selector: '', checkout_mode: 'browser', ...drop
-  });
+  const [d, setD] = useState<Partial<Drop>>({ name: '', url: '', shop_id: null, search_term: '', drop_mode: 'search', monitor_interval: 3, quantity: 1, profile_id: profiles[0]?.id || null, use_proxy: false, keyword: '', atc_selector: '', checkout_mode: 'browser', ...drop });
   const s = (k: string) => (v: unknown) => setD(p => ({ ...p, [k]: v }));
-
   const selectedShop = shops.find(sh => sh.id === d.shop_id);
 
   async function save() {
@@ -132,20 +135,13 @@ function DropForm({ drop, shops, profiles, onSave, onClose }: { drop: Partial<Dr
   return (
     <div>
       <F label="Drop name"><input style={inp} value={d.name} onChange={e => s('name')(e.target.value)} placeholder="e.g. 2024 Topps Chrome Hobby Box" /></F>
-
-      {/* Mode toggle */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {['search', 'url'].map(mode => (
-          <button key={mode} onClick={() => s('drop_mode')(mode)} style={btn({
-            flex: 1, background: d.drop_mode === mode ? '#0d2b1a' : '#1a1a1a',
-            borderColor: d.drop_mode === mode ? '#16a34a55' : '#333',
-            color: d.drop_mode === mode ? '#4ade80' : '#888',
-          })}>
-            {mode === 'search' ? '🔍 Search mode' : '🔗 Direct URL mode'}
+          <button key={mode} onClick={() => s('drop_mode')(mode)} style={btn({ flex: 1, background: d.drop_mode === mode ? '#0d2b1a' : '#1a1a1a', borderColor: d.drop_mode === mode ? '#16a34a55' : '#333', color: d.drop_mode === mode ? '#4ade80' : '#888' })}>
+            {mode === 'search' ? '🔍 Search mode' : '🔗 Direct URL'}
           </button>
         ))}
       </div>
-
       {d.drop_mode === 'search' ? (
         <>
           <F label="Shop">
@@ -155,21 +151,20 @@ function DropForm({ drop, shops, profiles, onSave, onClose }: { drop: Partial<Dr
             </select>
             {shops.length === 0 && <div style={{ fontSize: 12, color: '#facc15', marginTop: 4 }}>No shops yet — add one in the Shops tab first</div>}
           </F>
-          <F label="Search term">
-            <input style={inp} value={d.search_term} onChange={e => s('search_term')(e.target.value)} placeholder="e.g. topps chrome hobby 2024" />
-          </F>
+          <F label="Search term"><input style={inp} value={d.search_term} onChange={e => s('search_term')(e.target.value)} placeholder="e.g. topps chrome hobby 2024" /></F>
           {selectedShop && (
             <div style={{ fontSize: 12, color: '#888', marginBottom: 12, padding: '8px 10px', background: '#1a1a1a', borderRadius: 8 }}>
-              {selectedShop.is_shopify
-                ? `✓ Will use Shopify API at ${selectedShop.url}/products.json`
-                : `Will crawl ${selectedShop.url}/search?q=...`}
+              {selectedShop.is_shopify ? `✓ Shopify API — ${selectedShop.url}/products.json` : `Search crawl — ${selectedShop.url}/search?q=...`}
+              {selectedShop.login_email && <span style={{ color: '#4ade80', marginLeft: 8 }}>🔐 Login saved</span>}
             </div>
           )}
         </>
       ) : (
-        <F label="Product URL"><input style={{ ...inp, fontFamily: 'monospace' }} value={d.url} onChange={e => s('url')(e.target.value)} placeholder="https://shop.com/products/topps-chrome" /></F>
+        <>
+          <F label="Product URL"><input style={{ ...inp, fontFamily: 'monospace' }} value={d.url} onChange={e => s('url')(e.target.value)} placeholder="https://shop.com/products/item" /></F>
+          <F label="In-stock keyword"><input style={inp} value={d.keyword} onChange={e => s('keyword')(e.target.value)} placeholder="add to cart" /></F>
+        </>
       )}
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 4 }}>
         <F label="Monitor interval (seconds)"><input style={inp} type="number" value={d.monitor_interval} onChange={e => s('monitor_interval')(Number(e.target.value))} /></F>
         <F label="Quantity to buy"><input style={inp} type="number" value={d.quantity} onChange={e => s('quantity')(Number(e.target.value))} /></F>
@@ -185,14 +180,7 @@ function DropForm({ drop, shops, profiles, onSave, onClose }: { drop: Partial<Dr
             <option value="fast">Fast (API)</option>
           </select>
         </F>
-        {d.drop_mode === 'url' && (
-          <div style={{ gridColumn: '1/-1' }}>
-            <F label="In-stock keyword"><input style={inp} value={d.keyword} onChange={e => s('keyword')(e.target.value)} placeholder="add to cart" /></F>
-          </div>
-        )}
-        <div style={{ gridColumn: '1/-1' }}>
-          <F label="Add-to-cart selector (optional)"><input style={{ ...inp, fontFamily: 'monospace' }} value={d.atc_selector} onChange={e => s('atc_selector')(e.target.value)} placeholder="#add-to-cart or [name=add]" /></F>
-        </div>
+        <div style={{ gridColumn: '1/-1' }}><F label="Add-to-cart selector (optional)"><input style={{ ...inp, fontFamily: 'monospace' }} value={d.atc_selector} onChange={e => s('atc_selector')(e.target.value)} placeholder="#add-to-cart or [name=add]" /></F></div>
         <div style={{ gridColumn: '1/-1', display: 'flex', alignItems: 'center', gap: 8 }}>
           <input type="checkbox" id="proxy" checked={d.use_proxy} onChange={e => s('use_proxy')(e.target.checked)} />
           <label htmlFor="proxy" style={{ fontSize: 13, color: '#888', cursor: 'pointer' }}>Use proxy rotation</label>
@@ -209,7 +197,6 @@ function DropForm({ drop, shops, profiles, onSave, onClose }: { drop: Partial<Dr
 function ProfileForm({ profile, onSave, onClose }: { profile: Partial<Profile> | null; onSave: () => void; onClose: () => void }) {
   const [p, setP] = useState({ name: 'New Profile', first_name: '', last_name: '', email: '', phone: '', address1: '', address2: '', city: '', postcode: '', country: 'GB', card_name: '', card_number: '', card_expiry: '', card_cvv: '', ...profile });
   const s = (k: string) => (v: string) => setP(x => ({ ...x, [k]: v }));
-
   async function save() {
     if (p.id) {
       await fetch(`/api/profiles/${p.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
@@ -218,7 +205,6 @@ function ProfileForm({ profile, onSave, onClose }: { profile: Partial<Profile> |
     }
     onSave();
   }
-
   return (
     <div>
       <p style={{ fontSize: 12, color: '#888', marginBottom: 16, marginTop: 0 }}>Card details are stored in your private Neon database.</p>
@@ -249,6 +235,57 @@ function ProfileForm({ profile, onSave, onClose }: { profile: Partial<Profile> |
   );
 }
 
+function LiveLog({ logs }: { logs: Log[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const prevLen = useRef(0);
+
+  useEffect(() => {
+    if (logs.length !== prevLen.current && ref.current && !collapsed) {
+      ref.current.scrollTop = ref.current.scrollHeight;
+      prevLen.current = logs.length;
+    }
+  }, [logs, collapsed]);
+
+  const recent = logs.slice(0, 50);
+  const activeCount = recent.filter(l => ['monitoring','searching','carted','checking_out'].some(s => l.message.toLowerCase().includes(s))).length;
+
+  return (
+    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, background: '#0a0a0a', borderTop: '0.5px solid #2a2a2a' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 16px', cursor: 'pointer', userSelect: 'none' }} onClick={() => setCollapsed(!collapsed)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80', animation: 'pulse 2s infinite' }} />
+          <span style={{ fontSize: 12, fontWeight: 500, color: '#e5e5e5' }}>Live log</span>
+          <span style={{ fontSize: 11, color: '#888' }}>{logs.length} entries</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!collapsed && logs[0] && (
+            <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#888', maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {logs[0].message}
+            </span>
+          )}
+          <span style={{ fontSize: 18, color: '#888', lineHeight: 1 }}>{collapsed ? '▲' : '▼'}</span>
+        </div>
+      </div>
+      {!collapsed && (
+        <div ref={ref} style={{ height: 180, overflowY: 'auto', padding: '0 16px 8px', fontFamily: 'monospace', fontSize: 12 }}>
+          {logs.length === 0 && <div style={{ color: '#555', padding: '8px 0' }}>No activity yet — start a drop to see live updates here.</div>}
+          {logs.map(e => {
+            const col = e.level === 'success' ? '#4ade80' : e.level === 'warn' ? '#facc15' : e.level === 'error' ? '#f87171' : '#666';
+            return (
+              <div key={e.id} style={{ display: 'flex', gap: 12, padding: '3px 0', borderBottom: '0.5px solid #151515' }}>
+                <span style={{ color: '#444', flexShrink: 0, fontSize: 10 }}>{new Date(e.created_at).toLocaleTimeString()}</span>
+                <span style={{ color: col }}>{e.message}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+    </div>
+  );
+}
+
 export default function Home() {
   const [tab, setTab] = useState('Drops');
   const [drops, setDrops] = useState<Drop[]>([]);
@@ -273,10 +310,10 @@ export default function Home() {
     setLogs(Array.isArray(l) ? l : []);
   }, []);
 
-  useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, [load]);
+  useEffect(() => { load(); const t = setInterval(load, 3000); return () => clearInterval(t); }, [load]);
 
   async function toggleDrop(drop: Drop) {
-    const newStatus = ['monitoring', 'carted', 'checking_out', 'searching'].includes(drop.status) ? 'idle' : 'monitoring';
+    const newStatus = ['monitoring','carted','checking_out','searching'].includes(drop.status) ? 'idle' : 'monitoring';
     await fetch(`/api/drops/${drop.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
     load();
   }
@@ -285,12 +322,12 @@ export default function Home() {
   async function deleteShop(id: number) { await fetch(`/api/shops/${id}`, { method: 'DELETE' }); load(); }
   async function deleteProfile(id: number) { await fetch(`/api/profiles/${id}`, { method: 'DELETE' }); load(); }
 
-  const monitoring = drops.filter(d => ['monitoring', 'searching'].includes(d.status)).length;
+  const monitoring = drops.filter(d => ['monitoring','searching'].includes(d.status)).length;
   const ordered = drops.filter(d => d.status === 'success').length;
   const TABS = ['Drops', 'Shops', 'Profiles', 'Activity Log'];
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 1rem' }}>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 1rem', paddingBottom: '240px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 22, color: '#4ade80' }}>⚡</span>
@@ -310,7 +347,6 @@ export default function Home() {
         ))}
       </div>
 
-      {/* DROPS */}
       {tab === 'Drops' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -321,7 +357,7 @@ export default function Home() {
             {drops.map(d => {
               const prof = profiles.find(p => p.id === d.profile_id);
               const shop = shops.find(s => s.id === d.shop_id);
-              const running = ['monitoring', 'carted', 'checking_out', 'searching'].includes(d.status);
+              const running = ['monitoring','carted','checking_out','searching'].includes(d.status);
               return (
                 <div key={d.id} style={card}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -329,7 +365,7 @@ export default function Home() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 500 }}>{d.name}</span>
                         <Badge status={d.status} />
-                        {d.drop_mode === 'search' && <span style={{ fontSize: 11, color: '#a78bfa', background: '#1a1a2b', padding: '2px 8px', borderRadius: 20, border: '0.5px solid #a78bfa44' }}>search mode</span>}
+                        {d.drop_mode === 'search' && <span style={{ fontSize: 11, color: '#a78bfa', background: '#1a1a2b', padding: '2px 8px', borderRadius: 20, border: '0.5px solid #a78bfa44' }}>search</span>}
                       </div>
                       {d.drop_mode === 'search'
                         ? <div style={{ fontSize: 12, color: '#888' }}>{shop?.name || '—'} · <span style={{ fontFamily: 'monospace' }}>{d.search_term}</span></div>
@@ -360,25 +396,26 @@ export default function Home() {
         </div>
       )}
 
-      {/* SHOPS */}
       {tab === 'Shops' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
             <button style={btn()} onClick={() => { setEditShop({}); setModal('shop'); }}>+ Add shop</button>
           </div>
-          {shops.length === 0 && <div style={{ textAlign: 'center', padding: '3rem 0', color: '#888' }}>No shops yet. Add the shops you want to monitor.</div>}
+          {shops.length === 0 && <div style={{ textAlign: 'center', padding: '3rem 0', color: '#888' }}>No shops yet.</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {shops.map(sh => (
               <div key={sh.id} style={card}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 500 }}>{sh.name}</span>
                       <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, border: '0.5px solid', ...(sh.is_shopify ? { color: '#4ade80', background: '#0d2b1a', borderColor: '#16a34a55' } : { color: '#facc15', background: '#2b2b0d', borderColor: '#facc1555' }) }}>
                         {sh.is_shopify ? 'Shopify' : 'Non-Shopify'}
                       </span>
+                      {sh.login_email && <span style={{ fontSize: 11, color: '#a78bfa', background: '#1a1a2b', padding: '2px 8px', borderRadius: 20, border: '0.5px solid #a78bfa44' }}>🔐 Login saved</span>}
                     </div>
                     <div style={{ fontSize: 12, color: '#888', fontFamily: 'monospace' }}>{sh.url}</div>
+                    {sh.login_email && <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>{sh.login_email}</div>}
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={() => { setEditShop(sh); setModal('shop'); }} style={btn()}>✎</button>
@@ -391,7 +428,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* PROFILES */}
       {tab === 'Profiles' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -426,19 +462,18 @@ export default function Home() {
         </div>
       )}
 
-      {/* LOGS */}
       {tab === 'Activity Log' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <span style={{ fontSize: 13, color: '#888' }}>{logs.length} entries — refreshes every 5s</span>
+          <div style={{ marginBottom: 12 }}>
+            <span style={{ fontSize: 13, color: '#888' }}>{logs.length} entries — updates every 3s</span>
           </div>
-          <div style={{ background: '#0a0a0a', border: '0.5px solid #2a2a2a', borderRadius: 12, padding: '0.75rem 1rem', maxHeight: 480, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12 }}>
+          <div style={{ background: '#0a0a0a', border: '0.5px solid #2a2a2a', borderRadius: 12, padding: '0.75rem 1rem', maxHeight: 400, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12 }}>
             {logs.length === 0 && <div style={{ color: '#888', padding: '1rem 0' }}>No log entries yet.</div>}
             {logs.map(e => {
-              const col = e.level === 'success' ? '#4ade80' : e.level === 'warn' ? '#facc15' : e.level === 'error' ? '#f87171' : '#888';
+              const col = e.level === 'success' ? '#4ade80' : e.level === 'warn' ? '#facc15' : e.level === 'error' ? '#f87171' : '#666';
               return (
-                <div key={e.id} style={{ display: 'flex', gap: 12, padding: '4px 0', borderBottom: '0.5px solid #1a1a1a' }}>
-                  <span style={{ color: '#555', flexShrink: 0, fontSize: 11 }}>{new Date(e.created_at).toLocaleTimeString()}</span>
+                <div key={e.id} style={{ display: 'flex', gap: 12, padding: '4px 0', borderBottom: '0.5px solid #111' }}>
+                  <span style={{ color: '#444', flexShrink: 0, fontSize: 11 }}>{new Date(e.created_at).toLocaleTimeString()}</span>
                   <span style={{ color: col }}>{e.message}</span>
                 </div>
               );
@@ -462,6 +497,8 @@ export default function Home() {
           <ProfileForm profile={editProfile} onSave={() => { load(); setModal(null); setEditProfile(null); }} onClose={() => { setModal(null); setEditProfile(null); }} />
         </Modal>
       )}
+
+      <LiveLog logs={logs} />
     </div>
   );
 }

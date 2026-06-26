@@ -10,8 +10,16 @@ export async function initDB() {
       url TEXT NOT NULL,
       is_shopify BOOLEAN DEFAULT false,
       search_selector TEXT DEFAULT '',
+      login_email TEXT DEFAULT '',
+      login_password TEXT DEFAULT '',
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
+  `;
+  await sql`
+    ALTER TABLE shops ADD COLUMN IF NOT EXISTS login_email TEXT DEFAULT ''
+  `;
+  await sql`
+    ALTER TABLE shops ADD COLUMN IF NOT EXISTS login_password TEXT DEFAULT ''
   `;
   await sql`
     CREATE TABLE IF NOT EXISTS drops (

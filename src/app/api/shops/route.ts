@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
   const b = await req.json();
   const url = b.url.replace(/\/$/, '');
   const result = await sql`
-    INSERT INTO shops (name, url, is_shopify, search_selector)
-    VALUES (${b.name}, ${url}, ${b.is_shopify||false}, ${b.search_selector||''})
+    INSERT INTO shops (name, url, is_shopify, search_selector, login_email, login_password)
+    VALUES (${b.name}, ${url}, ${b.is_shopify||false}, ${b.search_selector||''}, ${b.login_email||''}, ${b.login_password||''})
     RETURNING *
   `;
   return NextResponse.json(result[0]);

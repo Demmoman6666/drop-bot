@@ -6,7 +6,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const b = await req.json();
   const id = parseInt(params.id);
   await sql`
-    UPDATE shops SET name=${b.name}, url=${b.url}, is_shopify=${b.is_shopify||false}, search_selector=${b.search_selector||''}
+    UPDATE shops SET
+      name=${b.name}, url=${b.url}, is_shopify=${b.is_shopify||false},
+      search_selector=${b.search_selector||''},
+      login_email=${b.login_email||''},
+      login_password=${b.login_password||''}
     WHERE id=${id}
   `;
   const result = await sql`SELECT * FROM shops WHERE id=${id}`;
